@@ -1,9 +1,11 @@
-// 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
 import { Pedometer } from 'expo-sensors';
+import * as BackgroundFetch from 'expo-background-fetch';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
+
+export const BACKGROUND_STEP_TASK = 'background-step-task';
 
 // ── Constants ──────────────────────────────────────────────
 const STEP_LENGTH_M = 0.762;
@@ -40,7 +42,7 @@ function getTodayStr(): string {
 }
 
 // ── Get start of today (midnight) ─────────────────────────
-function getMidnight(): Date {
+export function getMidnight(): Date {
   const now = new Date();
   return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
 }
@@ -267,6 +269,17 @@ export function useStepCounter() {
       if (mounted) {
         await initSteps();
         scheduleMidnightReset();
+        
+        // 4. Register background fetch task
+        try {
+          await BackgroundFetch.registerTaskAsync(BACKGROUND_STEP_TASK, {
+            minimumInterval: 15 * 60, // 15 minutes
+            stopOnTerminate: false, // android only
+            startOnBoot: true,      // android only
+          });
+        } catch (err) {
+          console.warn('Failed to register background fetch task:', err);
+        }
       }
     };
 
