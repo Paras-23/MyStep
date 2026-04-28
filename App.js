@@ -31,6 +31,7 @@
 // const Stack = createStackNavigator();
 
 import React from 'react';
+import './src/hooks/backgroundStepTask';
 import { View, ActivityIndicator, StatusBar, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';

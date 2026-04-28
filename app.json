@@ -14,12 +14,7 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.yourname.mystep",
-      "infoPlist": {
-        "NSMotionUsageDescription": "MyStep uses motion data to count your steps accurately.",
-        "NSHealthShareUsageDescription": "MyStep reads your step count from Apple Health.",
-        "NSHealthUpdateUsageDescription": "MyStep writes your step data to Apple Health."
-      }
+      "bundleIdentifier": "com.yourname.mystep"
     },
     "android": {
       "adaptiveIcon": {
@@ -30,10 +25,7 @@
       "permissions": [
         "ACTIVITY_RECOGNITION",
         "BODY_SENSORS",
-        "HIGH_SAMPLING_RATE_SENSORS",
-        "android.permission.ACTIVITY_RECOGNITION",
-        "android.permission.BODY_SENSORS",
-        "android.permission.HIGH_SAMPLING_RATE_SENSORS"
+        "HIGH_SAMPLING_RATE_SENSORS"
       ]
     },
     "plugins": [
@@ -46,9 +38,8 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "79f10512-9e8c-4478-8b19-fa895cadf0eb"
+        "projectId": "32dcb62c-fe71-49e7-b598-57dfcebb2756"
       }
-    },
-    "owner": "kky18"
+    }
   }
 }
