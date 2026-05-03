@@ -34,7 +34,8 @@
         {
           "motionPermission": "MyStep needs motion access to count your steps."
         }
-      ]
+      ],
+      "expo-background-fetch" // ✅ CRITICAL
     ],
     "extra": {
       "eas": {

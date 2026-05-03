@@ -189,7 +189,7 @@ export function useStepCounter() {
       mounted = false;
       stopSubscription();
     };
-  }, []);
+  }, [initSteps]);
 
   const forceSync = async () => {
     // Re-read from device on manual sync for maximum accuracy
