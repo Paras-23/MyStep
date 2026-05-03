@@ -1,61 +1,71 @@
 /**
- * backgroundStepTask.ts
- *
- * ⚠️  IMPORTANT — import this file in your App.tsx (or index.ts) at the very
- * top, before any component renders:
- *
- *   import './backgroundStepTask';   // ← add this line
- *
- * TaskManager.defineTask MUST be called at module level, outside any hook or
- * component.  If it runs inside useEffect / a hook, Android silently ignores
- * it and the background task does nothing.
+ * MUST IMPORT THIS FILE AT THE TOP OF App.tsx:
+ * import './backgroundStepTask';
  */
 
-import * as BackgroundFetch from 'expo-background-fetch';
-import { Pedometer } from 'expo-sensors';
-import * as TaskManager from 'expo-task-manager';
-import { supabase } from '../lib/supabase';           // adjust path if needed
-import { getMidnight, stepsToCalories, stepsToDistance } from './useStepCounter';
+import * as BackgroundFetch from "expo-background-fetch";
+import { Pedometer } from "expo-sensors";
+import * as TaskManager from "expo-task-manager";
+import { supabase } from "../lib/supabase";
+import {
+  getMidnight,
+  stepsToCalories,
+  stepsToDistance,
+} from "./useStepCounter";
 
-export const BACKGROUND_STEP_TASK = 'background-step-task';
+export const BACKGROUND_STEP_TASK = "background-step-task";
 
-// ─── Define the task ────────────────────────────────────────────────────────
-// This block runs every ~15 minutes even when the app is completely closed.
-// Android's hardware step-counter chip keeps accumulating steps regardless of
-// app state, so getStepCountAsync always returns the true total for today.
 TaskManager.defineTask(BACKGROUND_STEP_TASK, async () => {
   try {
-    // 1. Recover the user session from AsyncStorage (supabase-js persists it)
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+    const available = await Pedometer.isAvailableAsync();
+    if (!available) return BackgroundFetch.BackgroundFetchResult.NoData;
+
+    // refreshSession is more reliable than getSession in a cold-start / killed-app context
+    const { data: sessionData, error: sessionError } =
+      await supabase.auth.getSession();
+    let session = sessionData?.session;
+
+    // If session is stale, try refreshing it
+    if (!session || sessionError) {
+      const { data: refreshed } = await supabase.auth.refreshSession();
+      session = refreshed?.session ?? null;
+    }
 
     if (!session?.user?.id) {
       return BackgroundFetch.BackgroundFetchResult.NoData;
     }
 
-    // 2. Read today's steps from the hardware pedometer chip
+    const userId = session.user.id;
     const midnight = getMidnight();
-    const now      = new Date();
-    const { steps } = await Pedometer.getStepCountAsync(midnight, now);
-    const safeSteps = Math.max(0, steps);
+    const now = new Date();
 
-    if (safeSteps === 0) {
-      return BackgroundFetch.BackgroundFetchResult.NoData;
-    }
+    const result = await Pedometer.getStepCountAsync(midnight, now);
+    const deviceSteps = Math.max(0, result.steps);
 
-    // 3. Upsert into Supabase so the count is never lost
-    await supabase.rpc('upsert_steps', {
-      p_user_id:     session.user.id,
-      p_steps:       safeSteps,
-      p_calories:    stepsToCalories(safeSteps),
-      p_distance_km: stepsToDistance(safeSteps),
+    if (deviceSteps === 0) return BackgroundFetch.BackgroundFetchResult.NoData;
+
+    // Fetch current DB value — never overwrite with a lower number
+    // (protects against sensor resets or background task firing out of order)
+    const { data: existing } = await supabase
+      .from("daily_steps")
+      .select("steps")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    const savedSteps: number = existing?.steps ?? 0;
+    const stepsToWrite = Math.max(deviceSteps, savedSteps);
+
+    const { error } = await supabase.rpc("upsert_steps", {
+      p_user_id: userId,
+      p_steps: stepsToWrite,
+      p_calories: stepsToCalories(stepsToWrite),
+      p_distance_km: stepsToDistance(stepsToWrite),
     });
 
-    console.log(`[BackgroundStepTask] Synced ${safeSteps} steps`);
+    if (error) return BackgroundFetch.BackgroundFetchResult.Failed;
+
     return BackgroundFetch.BackgroundFetchResult.NewData;
-  } catch (err) {
-    console.warn('[BackgroundStepTask] Failed:', err);
+  } catch {
     return BackgroundFetch.BackgroundFetchResult.Failed;
   }
 });

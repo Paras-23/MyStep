@@ -30,27 +30,34 @@
 
 // const Stack = createStackNavigator();
 
-import React from 'react';
-import './src/hooks/backgroundStepTask';
-import { View, ActivityIndicator, StatusBar, Platform } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
-import { createStackNavigator } from '@react-navigation/stack';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
-import * as TaskManager from 'expo-task-manager';
-import * as BackgroundFetch from 'expo-background-fetch';
-import { Pedometer } from 'expo-sensors';
-import { AuthProvider, useAuth } from './src/context/AuthContext';
-import RegisterScreen from './src/screens/RegisterScreen';
-import LoginScreen from './src/screens/LoginScreen';
-import TabNavigator from './src/navigation/TabNavigator';
-import { Colors } from './constants/theme';
-import { supabase } from './src/lib/supabase';
-import { BACKGROUND_STEP_TASK, getMidnight, stepsToCalories, stepsToDistance } from './src/hooks/useStepCounter';
+import React from "react";
+import "./src/hooks/backgroundStepTask";
+import { View, ActivityIndicator, StatusBar, Platform } from "react-native";
+import { NavigationContainer } from "@react-navigation/native";
+import { createStackNavigator } from "@react-navigation/stack";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { SafeAreaProvider } from "react-native-safe-area-context";
+import * as TaskManager from "expo-task-manager";
+import * as BackgroundFetch from "expo-background-fetch";
+import { Pedometer } from "expo-sensors";
+import { AuthProvider, useAuth } from "./src/context/AuthContext";
+import RegisterScreen from "./src/screens/RegisterScreen";
+import LoginScreen from "./src/screens/LoginScreen";
+import TabNavigator from "./src/navigation/TabNavigator";
+import { Colors } from "./constants/theme";
+import { supabase } from "./src/lib/supabase";
+import {
+  BACKGROUND_STEP_TASK,
+  getMidnight,
+  stepsToCalories,
+  stepsToDistance,
+} from "./src/hooks/useStepCounter";
 
 TaskManager.defineTask(BACKGROUND_STEP_TASK, async () => {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     if (!session?.user?.id) {
       return BackgroundFetch.BackgroundFetchResult.NoData;
     }
@@ -66,7 +73,7 @@ TaskManager.defineTask(BACKGROUND_STEP_TASK, async () => {
     const steps = Math.max(0, result.steps);
 
     if (steps > 0) {
-      await supabase.rpc('upsert_steps', {
+      await supabase.rpc("upsert_steps", {
         p_user_id: session.user.id,
         p_steps: steps,
         p_calories: stepsToCalories(steps),
@@ -74,10 +81,10 @@ TaskManager.defineTask(BACKGROUND_STEP_TASK, async () => {
       });
       return BackgroundFetch.BackgroundFetchResult.NewData;
     }
-    
+
     return BackgroundFetch.BackgroundFetchResult.NoData;
   } catch (error) {
-    console.warn('Background Fetch Error:', error);
+    console.warn("Background Fetch Error:", error);
     return BackgroundFetch.BackgroundFetchResult.Failed;
   }
 });
@@ -89,19 +96,23 @@ function RootNavigator() {
 
   if (loading) {
     return (
-      <View style={{
-        flex: 1,
-        backgroundColor: Colors.background,
-        justifyContent: 'center',
-        alignItems: 'center',
-      }}>
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: Colors.background,
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
         <ActivityIndicator size="large" color={Colors.primary} />
       </View>
     );
   }
 
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false, animationEnabled: true }}>
+    <Stack.Navigator
+      screenOptions={{ headerShown: false, animationEnabled: true }}
+    >
       {session ? (
         <Stack.Screen name="Main" component={TabNavigator} />
       ) : (
@@ -122,7 +133,7 @@ export default function App() {
           <StatusBar
             barStyle="light-content"
             backgroundColor={Colors.background}
-            translucent={Platform.OS === 'android'}
+            translucent={Platform.OS === "android"}
           />
           <NavigationContainer>
             <RootNavigator />
