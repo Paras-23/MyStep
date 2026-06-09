@@ -1,19 +1,21 @@
 // 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { AppState, AppStateStatus } from 'react-native';
+import { AppState, AppStateStatus, Platform } from 'react-native';
 import { Pedometer } from 'expo-sensors';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
+import * as AndroidPedometer from 'expo-android-pedometer';
+
 
 // ── Constants ──────────────────────────────────────────────
 const STEP_LENGTH_M = 0.762;
-const WEIGHT_KG     = 70;
-const WALKING_MET   = 3.5;
+const WEIGHT_KG = 70;
+const WALKING_MET = 3.5;
 const SYNC_INTERVAL = 2000;  // sync every 2 seconds
 
 // ── Helpers ────────────────────────────────────────────────
 export function stepsToCalories(steps: number): number {
-  const distKm      = (steps * STEP_LENGTH_M) / 1000;
+  const distKm = (steps * STEP_LENGTH_M) / 1000;
   const durationHrs = distKm / 5;
   return Math.round(WALKING_MET * WEIGHT_KG * durationHrs);
 }
@@ -24,12 +26,12 @@ export function stepsToDistance(steps: number): number {
 
 // Real-time heart rate from cadence
 const RESTING_HR = 62;
-const MAX_HR     = 185;
+const MAX_HR = 185;
 
 export function cadenceToHeartRate(spm: number): number {
   if (spm <= 0) return RESTING_HR;
   const intensity = Math.min(0.85, (spm / 160) * 0.85);
-  const hr        = RESTING_HR + (MAX_HR - RESTING_HR) * intensity;
+  const hr = RESTING_HR + (MAX_HR - RESTING_HR) * intensity;
   const variation = (Math.random() - 0.5) * 4;
   return Math.round(Math.min(MAX_HR, Math.max(RESTING_HR, hr + variation)));
 }
@@ -49,21 +51,21 @@ function getMidnight(): Date {
 export function useStepCounter() {
   const { session } = useAuth();
 
-  const [steps,            setSteps]            = useState(0);
-  const [calories,         setCalories]         = useState(0);
-  const [distanceKm,       setDistanceKm]       = useState(0);
-  const [heartRate,        setHeartRate]        = useState(RESTING_HR);
-  const [isAvailable,      setIsAvailable]      = useState(false);
-  const [permissionStatus, setPermissionStatus] = useState<'unknown'|'granted'|'denied'>('unknown');
+  const [steps, setSteps] = useState(0);
+  const [calories, setCalories] = useState(0);
+  const [distanceKm, setDistanceKm] = useState(0);
+  const [heartRate, setHeartRate] = useState(RESTING_HR);
+  const [isAvailable, setIsAvailable] = useState(false);
+  const [permissionStatus, setPermissionStatus] = useState<'unknown' | 'granted' | 'denied'>('unknown');
 
-  const subscriptionRef  = useRef<any>(null);
-  const syncTimerRef     = useRef<any>(null);
-  const hrTimerRef       = useRef<any>(null);
+  const subscriptionRef = useRef<any>(null);
+  const syncTimerRef = useRef<any>(null);
+  const hrTimerRef = useRef<any>(null);
   const midnightTimerRef = useRef<any>(null);
-  const lastSyncedRef    = useRef(0);
-  const totalStepsRef    = useRef(0);
-  const currentDateRef   = useRef(getTodayStr());  // tracks which day we're on
-  const snapshots        = useRef<{ time: number; steps: number }[]>([]);
+  const lastSyncedRef = useRef(0);
+  const totalStepsRef = useRef(0);
+  const currentDateRef = useRef(getTodayStr());  // tracks which day we're on
+  const snapshots = useRef<{ time: number; steps: number }[]>([]);
 
   // ── Update all displayed stats ─────────────────────────
   const updateStats = useCallback((total: number) => {
@@ -78,13 +80,13 @@ export function useStepCounter() {
 
   // ── Cadence for heart rate ─────────────────────────────
   const getCadence = useCallback((): number => {
-    const now    = Date.now();
+    const now = Date.now();
     const window = 10000;
     const recent = snapshots.current.filter(s => now - s.time <= window);
     snapshots.current = recent;
     if (recent.length < 2) return 0;
-    const oldest   = recent[0];
-    const newest   = recent[recent.length - 1];
+    const oldest = recent[0];
+    const newest = recent[recent.length - 1];
     const stepDiff = newest.steps - oldest.steps;
     const timeDiff = (newest.time - oldest.time) / 1000;
     if (timeDiff <= 0 || stepDiff < 0) return 0;
@@ -98,9 +100,9 @@ export function useStepCounter() {
     lastSyncedRef.current = currentSteps;
     try {
       await supabase.rpc('upsert_steps', {
-        p_user_id:     session.user.id,
-        p_steps:       currentSteps,
-        p_calories:    stepsToCalories(currentSteps),
+        p_user_id: session.user.id,
+        p_steps: currentSteps,
+        p_calories: stepsToCalories(currentSteps),
         p_distance_km: stepsToDistance(currentSteps),
       });
     } catch (e) {
@@ -115,10 +117,13 @@ export function useStepCounter() {
   // non-walking motion itself.
   const readTodayDeviceSteps = useCallback(async (): Promise<number> => {
     try {
-      const midnight = getMidnight();
-      const now      = new Date();
-      const result   = await Pedometer.getStepCountAsync(midnight, now);
-      return Math.max(0, result.steps);
+      if (Platform.OS === 'ios') {
+        const result = await Pedometer.getStepCountAsync(getMidnight(), new Date());
+        return Math.max(0, result.steps);
+      } else {
+        // Android — uses the native step counter chip directly
+        return await AndroidPedometer.getStepsCountAsync();
+      }
     } catch (_) {
       return 0;
     }
@@ -165,15 +170,15 @@ export function useStepCounter() {
       clearTimeout(midnightTimerRef.current);
     }
 
-    const now        = new Date();
-    const tomorrow   = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 5);
+    const now = new Date();
+    const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 5);
     const msToMidnight = tomorrow.getTime() - now.getTime();
 
     midnightTimerRef.current = setTimeout(async () => {
       // It's a new day — reset everything to 0
       currentDateRef.current = getTodayStr();
-      lastSyncedRef.current  = 0;
-      snapshots.current      = [];
+      lastSyncedRef.current = 0;
+      snapshots.current = [];
       updateStats(0);
 
       // Restart subscription with baseline 0 for the new day
@@ -187,13 +192,16 @@ export function useStepCounter() {
   // ── Full init / refresh ────────────────────────────────
   // Called on app open, foreground, and pull-to-refresh
   const initSteps = useCallback(async () => {
+    // Stop any existing subscription before reading hardware steps
+    stopSubscription();
+
     const todayStr = getTodayStr();
 
     // If the date changed since last read, force a reset
     if (currentDateRef.current !== todayStr) {
       currentDateRef.current = todayStr;
-      lastSyncedRef.current  = 0;
-      snapshots.current      = [];
+      lastSyncedRef.current = 0;
+      snapshots.current = [];
       updateStats(0);
     }
 
@@ -204,7 +212,6 @@ export function useStepCounter() {
     ]);
 
     // Use the maximum of hardware and saved DB value
-    // This ensures we never go backwards
     const trueTotal = Math.max(deviceSteps, savedSteps);
     lastSyncedRef.current = trueTotal;
     updateStats(trueTotal);
@@ -214,22 +221,28 @@ export function useStepCounter() {
     await startSubscription(trueTotal);
 
     return trueTotal;
-  }, [readTodayDeviceSteps, loadSavedSteps, updateStats, startSubscription]);
+  }, [stopSubscription, readTodayDeviceSteps, loadSavedSteps, updateStats, startSubscription]);
 
   // ── AppState listener ──────────────────────────────────
+  const initStepsRef = useRef(initSteps);
+  const syncToSupabaseRef = useRef(syncToSupabase);
+  const isInitializedRef = useRef(false);
+  useEffect(() => { initStepsRef.current = initSteps; }, [initSteps]);
+  useEffect(() => { syncToSupabaseRef.current = syncToSupabase; }, [syncToSupabase]);
+
   useEffect(() => {
-    const sub = AppState.addEventListener('change', async (state: AppStateStatus) => {
+    const sub = AppState.addEventListener('change', async (state) => {
       if (state === 'active') {
         // App came to foreground — re-read hardware steps
         // This is the fix for "steps not updating after app was closed"
-        await initSteps();
-      } else if (state === 'background' || state === 'inactive') {
+        await initStepsRef.current();
+      } else {
         // Save immediately before backgrounding
-        await syncToSupabase(totalStepsRef.current);
+        await syncToSupabaseRef.current(totalStepsRef.current);
       }
     });
     return () => sub.remove();
-  }, [initSteps, syncToSupabase]);
+  }, []);  // empty deps — listener registered exactly once
 
   // ── Sync timer every 2 seconds ─────────────────────────
   useEffect(() => {
@@ -263,8 +276,9 @@ export function useStepCounter() {
       setPermissionStatus(granted ? 'granted' : 'denied');
       if (!granted) return;
 
-      // 3. Init steps
-      if (mounted) {
+      // 3. Init steps (guarded to run only once)
+      if (!isInitializedRef.current) {
+        isInitializedRef.current = true;
         await initSteps();
         scheduleMidnightReset();
       }

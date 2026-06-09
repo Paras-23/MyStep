@@ -42,7 +42,8 @@
         {
           "motionPermission": "MyStep needs motion access to count your steps."
         }
-      ]
+      ],
+      "expo-android-pedometer"
     ],
     "extra": {
       "eas": {
